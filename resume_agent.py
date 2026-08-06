@@ -213,11 +213,12 @@ def select_education(state: ResumeState) -> dict:
 
 
 def draft_rewrite(state: ResumeState) -> dict:
-    """LLM call #2: rewrite bullets for selected entries, constrained
-    to each entry's own facts + tags. On a retry, prior violations for
-    that entry are fed back so the model can correct itself."""
+    """LLM call #3: rewrite bullets for every selected entry (projects
+    then education), constrained to each entry's own facts + tags. On a
+    retry, prior violations for that entry are fed back so the model can
+    correct itself."""
     drafts = {}
-    for entry_id in state["selected_ids"]:
+    for entry_id in state["selected_projects"] + state["selected_education"]:
         entry = state["bank"][entry_id]
         relevant_violations = [v for v in state["violations"] if v.startswith(entry_id)]
         violation_note = ""
