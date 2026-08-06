@@ -21,6 +21,7 @@ Each bank entry should look like:
 """
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -29,11 +30,20 @@ from typing import TypedDict
 import yaml
 
 from langgraph.graph import StateGraph, END
-from anthropic import Anthropic
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_anthropic import ChatAnthropic
+from langchain_ollama import ChatOllama
+from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
-client = Anthropic()
-MODEL = "claude-sonnet-4-6"
 MAX_RETRIES = 2
+BACKENDS = ("ollama", "anthropic", "azure")
+DEFAULT_MODELS = {
+    "ollama": "qwen2.5-coder:7b",
+    "anthropic": "claude-sonnet-4-6",
+    "azure": "gpt-4o-mini",
+}
+AZURE_API_VERSION = "2024-06-01"
 
 BANK_DIR = Path("bank")
 OUTPUT_DIR = Path("outputs")
@@ -130,6 +140,76 @@ def serialize_typst(data: dict) -> str:
         ]
         sections.append(f'  {_typst_str(section)}: (\n' + ",\n".join(items) + "\n  )")
     return "(\n" + ",\n".join(sections) + "\n)"
+
+
+# ---------------------------------------------------------------------------
+# 2.5. LLM layer — one factory plus small call helpers. Nodes never talk to
+#    an SDK directly; they call _llm_call against whatever model is in state.
+# ---------------------------------------------------------------------------
+
+
+def build_chat_model(
+    backend: str,
+    model: str,
+    *,
+    base_url: str | None = None,
+    azure_deployment: str | None = None,
+    azure_api_version: str | None = None,
+) -> BaseChatModel:
+    """Construct the chat model for a backend, temperature pinned to 0 for
+    deterministic output. Keys/endpoints are resolved by each LangChain
+    integration from the standard env vars, so this factory never reads env
+    itself — the CLI exports prompted values before calling this."""
+    if backend == "ollama":
+        return ChatOllama(model=model, temperature=0, base_url=base_url or "http://localhost:11434")
+    if backend == "anthropic":
+        return ChatAnthropic(model=model, temperature=0)
+    if backend == "azure":
+        if base_url:
+            return ChatOpenAI(model=model, temperature=0, base_url=base_url)
+        return AzureChatOpenAI(
+            model=model,
+            temperature=0,
+            azure_deployment=azure_deployment or model,
+            api_version=azure_api_version or AZURE_API_VERSION,
+        )
+    raise ValueError(f"Unknown LLM backend: {backend!r} (choose from ollama, anthropic, azure)")
+
+
+def _content_text(content) -> str:
+    """Normalize an AIMessage content — either a plain string or a list of
+    content blocks — into plain text."""
+    if isinstance(content, str):
+        return content
+    return "".join(
+        block.get("text", "")
+        for block in content
+        if isinstance(block, dict) and block.get("type") == "text"
+    )
+
+
+def _llm_call(model: BaseChatModel, system: str, user: str, max_tokens: int) -> str:
+    """One chat call that returns plain text. max_tokens caps the paid
+    backends; Ollama stops on its own and would reject the extra kwarg."""
+    messages = [SystemMessage(content=system), HumanMessage(content=user)]
+    kwargs = {} if isinstance(model, ChatOllama) else {"max_tokens": max_tokens}
+    return _content_text(model.invoke(messages, **kwargs).content)
+
+
+def _extract_json(text: str):
+    """Pull the first complete JSON value out of a model reply. Handles
+    markdown fences and trailing prose. Returns None when nothing parses.
+    The leading-quote branch exists for bare JSON strings like "full"."""
+    text = re.sub(r"```(?:json)?\s*|\s*```", "", text.strip())
+    hits = [(text.find(marker), marker) for marker in ('"', "{", "[")]
+    hits = [(i, m) for i, m in hits if i >= 0]
+    if not hits:
+        return None
+    start, _ = min(hits)
+    try:
+        return json.JSONDecoder().raw_decode(text[start:])[0]
+    except (json.JSONDecodeError, ValueError):
+        return None
 
 
 # ---------------------------------------------------------------------------
