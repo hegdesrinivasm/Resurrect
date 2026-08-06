@@ -60,6 +60,7 @@ MAIN_TYP = Path("main.typ")
 class ResumeState(TypedDict):
     job_description: str
     company: str
+    model: object                  # chat model (BaseChatModel) built per backend
     bank: dict                     # full content bank, loaded once at start
     selected_projects: list[str]   # project entry ids the agent picked
     selected_education: list[str]  # education entry ids implied by the tier
@@ -176,6 +177,22 @@ def build_chat_model(
     raise ValueError(f"Unknown LLM backend: {backend!r} (choose from ollama, anthropic, azure)")
 
 
+def build_model_from_env() -> BaseChatModel:
+    """Build a model from env vars with per-backend defaults. Used by the
+    __main__ fallback path, which never prompts; the CLI resolves its own
+    settings (prompts included) and calls build_chat_model directly."""
+    backend = os.environ.get("RESUME_BACKEND", "ollama")
+    if backend not in BACKENDS:
+        raise ValueError(f"Unknown LLM backend: {backend!r} (choose from {', '.join(BACKENDS)})")
+    return build_chat_model(
+        backend=backend,
+        model=os.environ.get("RESUME_MODEL") or DEFAULT_MODELS[backend],
+        base_url=os.environ.get("RESUME_BASE_URL") or None,
+        azure_deployment=os.environ.get("RESUME_AZURE_DEPLOYMENT") or None,
+        azure_api_version=os.environ.get("RESUME_AZURE_API_VERSION") or AZURE_API_VERSION,
+    )
+
+
 def _content_text(content) -> str:
     """Normalize an AIMessage content — either a plain string or a list of
     content blocks — into plain text."""
@@ -225,25 +242,20 @@ def select_projects(state: ResumeState) -> dict:
         for e in state["bank"].values()
         if e.get("_section") == "projects"
     ]
-    resp = client.messages.create(
-        model=MODEL,
-        max_tokens=500,
-        system=(
+    selected = _extract_json(_llm_call(
+        state["model"],
+        (
             "You select resume project entries relevant to a job description. "
             "Return ONLY a JSON array of entry ids, most relevant first. "
             "No preamble, no markdown fences."
         ),
-        messages=[{
-            "role": "user",
-            "content": (
-                f"Job description:\n{state['job_description']}\n\n"
-                f"Available project entries:\n{json.dumps(index, indent=2)}"
-            ),
-        }],
-    )
-    try:
-        selected = json.loads(resp.content[0].text)
-    except json.JSONDecodeError:
+        (
+            f"Job description:\n{state['job_description']}\n\n"
+            f"Available project entries:\n{json.dumps(index, indent=2)}"
+        ),
+        max_tokens=500,
+    ))
+    if not isinstance(selected, list):
         selected = []
     known = {e["id"] for e in index}
     selected = [eid for eid in selected if eid in known]
@@ -258,10 +270,9 @@ def select_education(state: ResumeState) -> dict:
         for e in state["bank"].values()
         if e.get("_section") == "education"
     ]
-    resp = client.messages.create(
-        model=MODEL,
-        max_tokens=100,
-        system=(
+    text = _llm_call(
+        state["model"],
+        (
             'You decide how much education history to show in a resume for a '
             'given job description. Return ONLY the JSON string "full" or '
             '"engineering_only", no preamble.\n'
@@ -270,18 +281,15 @@ def select_education(state: ResumeState) -> dict:
             '  "engineering_only": include only Engineering (senior or '
             'domain-specific roles where only the degree matters)'
         ),
-        messages=[{
-            "role": "user",
-            "content": (
-                f"Job description:\n{state['job_description']}\n\n"
-                f"Available education entries:\n{json.dumps(index, indent=2)}"
-            ),
-        }],
+        (
+            f"Job description:\n{state['job_description']}\n\n"
+            f"Available education entries:\n{json.dumps(index, indent=2)}"
+        ),
+        max_tokens=100,
     )
-    try:
-        tier = json.loads(resp.content[0].text)
-    except json.JSONDecodeError:
-        tier = resp.content[0].text.strip().strip('"')
+    tier = _extract_json(text)
+    if not isinstance(tier, str):
+        tier = text.strip().strip('"')   # legacy fallback for unquoted answers
     if tier not in ("full", "engineering_only"):
         tier = "engineering_only"
     tiers = ("sslc", "puc", "engineering") if tier == "full" else ("engineering",)
@@ -305,11 +313,9 @@ def draft_rewrite(state: ResumeState) -> dict:
                 "\n\nYour previous attempt had these violations — fix them:\n"
                 + "\n".join(relevant_violations)
             )
-
-        resp = client.messages.create(
-            model=MODEL,
-            max_tokens=400,
-            system=(
+        text = _llm_call(
+            state["model"],
+            (
                 "Rewrite resume bullets to better match a job description's phrasing. "
                 "You may ONLY reorder, rephrase, or re-emphasize facts already present "
                 "in the original bullets and the entry's tag list. "
@@ -317,17 +323,18 @@ def draft_rewrite(state: ResumeState) -> dict:
                 "even if the job description asks for it. "
                 "Return ONLY a JSON array of bullet strings."
             ),
-            messages=[{
-                "role": "user",
-                "content": (
-                    f"Job description:\n{state['job_description']}\n\n"
-                    f"Entry tags (allowed vocabulary): {entry['tags']}\n"
-                    f"Original bullets:\n" + "\n".join(entry["bullets"]["full"])
-                    + violation_note
-                ),
-            }],
+            (
+                f"Job description:\n{state['job_description']}\n\n"
+                f"Entry tags (allowed vocabulary): {entry['tags']}\n"
+                f"Original bullets:\n" + "\n".join(entry["bullets"]["full"])
+                + violation_note
+            ),
+            max_tokens=400,
         )
-        drafts[entry_id] = json.loads(resp.content[0].text)
+        bullets = _extract_json(text)
+        if not isinstance(bullets, list):
+            bullets = entry["bullets"]["full"]   # unparseable rewrite -> original
+        drafts[entry_id] = bullets
     return {"drafts": drafts}
 
 
@@ -427,6 +434,7 @@ if __name__ == "__main__":
         "job_description": jd_text,
         "company": "untitled",
         "bank": load_bank(),
+        "model": build_model_from_env(),
         "selected_projects": [],
         "selected_education": [],
         "education_tier": "",
