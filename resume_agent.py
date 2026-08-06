@@ -139,17 +139,18 @@ def serialize_typst(data: dict) -> str:
 #    changed; the graph below wires the transitions between them.
 # ---------------------------------------------------------------------------
 
-def select_entries(state: ResumeState) -> dict:
-    """LLM call #1: pick which bank entries fit this JD."""
+def select_projects(state: ResumeState) -> dict:
+    """LLM call #1: pick which project entries fit this JD."""
     index = [
         {"id": e["id"], "title": e["title"], "tags": e["tags"]}
         for e in state["bank"].values()
+        if e.get("_section") == "projects"
     ]
     resp = client.messages.create(
         model=MODEL,
         max_tokens=500,
         system=(
-            "You select resume entries relevant to a job description. "
+            "You select resume project entries relevant to a job description. "
             "Return ONLY a JSON array of entry ids, most relevant first. "
             "No preamble, no markdown fences."
         ),
@@ -157,12 +158,58 @@ def select_entries(state: ResumeState) -> dict:
             "role": "user",
             "content": (
                 f"Job description:\n{state['job_description']}\n\n"
-                f"Available entries:\n{json.dumps(index, indent=2)}"
+                f"Available project entries:\n{json.dumps(index, indent=2)}"
             ),
         }],
     )
-    selected = json.loads(resp.content[0].text)
-    return {"selected_ids": selected, "retry_count": 0, "violations": []}
+    try:
+        selected = json.loads(resp.content[0].text)
+    except json.JSONDecodeError:
+        selected = []
+    known = {e["id"] for e in index}
+    selected = [eid for eid in selected if eid in known]
+    return {"selected_projects": selected, "selected_ids": selected,
+            "retry_count": 0, "violations": []}
+
+
+def select_education(state: ResumeState) -> dict:
+    """LLM call #2: decide how much education history fits this JD."""
+    index = [
+        {"id": e["id"], "title": e["title"], "tags": e["tags"]}
+        for e in state["bank"].values()
+        if e.get("_section") == "education"
+    ]
+    resp = client.messages.create(
+        model=MODEL,
+        max_tokens=100,
+        system=(
+            'You decide how much education history to show in a resume for a '
+            'given job description. Return ONLY the JSON string "full" or '
+            '"engineering_only", no preamble.\n'
+            '  "full": include SSLC, PUC, and Engineering (fresher roles or '
+            'roles that value early schooling)\n'
+            '  "engineering_only": include only Engineering (senior or '
+            'domain-specific roles where only the degree matters)'
+        ),
+        messages=[{
+            "role": "user",
+            "content": (
+                f"Job description:\n{state['job_description']}\n\n"
+                f"Available education entries:\n{json.dumps(index, indent=2)}"
+            ),
+        }],
+    )
+    try:
+        tier = json.loads(resp.content[0].text)
+    except json.JSONDecodeError:
+        tier = resp.content[0].text.strip().strip('"')
+    if tier not in ("full", "engineering_only"):
+        tier = "engineering_only"
+    tiers = ("sslc", "puc", "engineering") if tier == "full" else ("engineering",)
+    selected = [e["id"] for e in index if e["id"] in state["bank"]
+                and state["bank"][e["id"]].get("tier") in tiers]
+    return {"education_tier": tier, "selected_education": selected,
+            "selected_ids": state.get("selected_projects", []) + selected}
 
 
 def draft_rewrite(state: ResumeState) -> dict:
@@ -265,14 +312,16 @@ def route_after_verify(state: ResumeState) -> str:
 # ---------------------------------------------------------------------------
 
 graph = StateGraph(ResumeState)
-graph.add_node("select_entries", select_entries)
+graph.add_node("select_projects", select_projects)
+graph.add_node("select_education", select_education)
 graph.add_node("draft_rewrite", draft_rewrite)
 graph.add_node("verify", verify)
 graph.add_node("write_resume_data", write_resume_data)
 graph.add_node("compile_typst", compile_typst)
 
-graph.set_entry_point("select_entries")
-graph.add_edge("select_entries", "draft_rewrite")
+graph.set_entry_point("select_projects")
+graph.add_edge("select_projects", "select_education")
+graph.add_edge("select_education", "draft_rewrite")
 graph.add_edge("draft_rewrite", "verify")
 graph.add_conditional_edges(
     "verify",
