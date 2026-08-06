@@ -43,17 +43,54 @@ python3 -m venv .venv
 .venv/bin/pip install -e .
 ```
 
-Requires `typst` on your PATH and an `ANTHROPIC_API_KEY` in the environment.
+Requires `typst` on your PATH and at least one reachable LLM backend.
+
+## Choose your backend
+
+The agent is backend-agnostic. Pick one via `RESUME_BACKEND`
+(`ollama` — the default —, `anthropic`, or `azure`); the CLI also asks
+interactively if the variable is unset. All models run at `temperature=0`.
+
+| Env var | Default | Meaning |
+| --- | --- | --- |
+| `RESUME_BACKEND` | `ollama` | `ollama` \| `anthropic` \| `azure` |
+| `RESUME_MODEL` | per backend | `qwen2.5-coder:7b` / `claude-sonnet-4-6` / `gpt-4o-mini` |
+| `RESUME_BASE_URL` | `http://localhost:11434` | API base URL (never prompted) |
+| `RESUME_AZURE_DEPLOYMENT` | = model | Azure deployment name |
+| `RESUME_AZURE_API_VERSION` | `2024-06-01` | Azure API version |
+
+Credentials come from the standard env vars of each backend
+(`ANTHROPIC_API_KEY`, `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT`,
+`OPENAI_API_KEY` for OpenAI-compatible endpoints) — the CLI prompts for
+them if they are unset.
+
+- **Ollama (local, free)** — run `ollama pull qwen2.5-coder:7b` once, then
+  use it with zero configuration:
+  ```bash
+  resume tailor job_description.txt --company acme
+  ```
+- **Anthropic** — `export ANTHROPIC_API_KEY=sk-...` (or let the CLI prompt):
+  ```bash
+  export RESUME_BACKEND=anthropic
+  resume tailor job_description.txt --company acme
+  ```
+- **Azure / Microsoft Foundry** — great if you have Azure for Students
+  credits; `gpt-4o-mini` runs well under a cent per resume. Point
+  `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_API_KEY` at your Foundry
+  deployment:
+  ```bash
+  export RESUME_BACKEND=azure
+  export RESUME_MODEL=gpt-4o-mini
+  resume tailor job_description.txt --company acme
+  ```
 
 ## Usage
 
 ```bash
-export ANTHROPIC_API_KEY=sk-...
-
-# Tailor a resume to a job description
+# Tailor a resume to a job description (backend from env or prompts)
 resume tailor job_description.txt --company acme
 
-# List the content bank
+# List the content bank (never touches the LLM)
 resume bank list
 resume bank list --section projects
 ```

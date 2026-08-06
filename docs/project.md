@@ -32,7 +32,9 @@ Three layers, mirroring the original design:
 
 ## The pipeline
 
-`resume_agent.py` assembles a `StateGraph`:
+`resume_agent.py` assembles a `StateGraph` over a `ResumeState` that
+carries the chat model itself (`model`), so no node touches an SDK
+directly:
 
 - `select_projects` (LLM) — relevance-match project entries against the JD.
 - `select_education` (LLM) — tier decision: `full` or `engineering_only`.
@@ -47,6 +49,22 @@ Three layers, mirroring the original design:
 - `generate_typst_file` — inlines verified (or original, on exhaustion)
   bullets into `main.typ` at `@@DATA@@` → `outputs/resume_<company>.typ`.
 - `compile_typst` — `typst compile`.
+
+## LLM layer
+
+`build_chat_model(backend, model, *, base_url, azure_deployment,
+azure_api_version)` is a pure factory returning a LangChain `BaseChatModel`:
+`ChatOllama`, `ChatAnthropic`, `AzureChatOpenAI`, or — when an azure
+backend also sets `RESUME_BASE_URL` — `ChatOpenAI` against an
+OpenAI-compatible serverless endpoint. The factory never reads the
+environment; credentials are resolved by each LangChain integration from
+its standard env vars (`AZURE_OPENAI_API_KEY`/`AZURE_OPENAI_ENDPOINT`,
+`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`). The CLI resolves backend/model as
+env var → prompt → default (`RESUME_BACKEND`, `RESUME_MODEL`,
+`RESUME_BASE_URL`, `RESUME_AZURE_DEPLOYMENT`, `RESUME_AZURE_API_VERSION`)
+and prompts for any missing credential, exporting it so construction sees
+it. All models run at `temperature=0`; the `max_tokens` cap is passed to
+paid backends only (Ollama rejects the kwarg and stops on its own).
 
 ## Why the deterministic guardrail
 
@@ -70,9 +88,11 @@ resume tailor <job_description.txt> [--company NAME]
 resume bank list [--section projects|education]
 ```
 
-`resume tailor` streams per-node progress ("Selecting projects...",
-"Deciding education tier...", "Drafting rewrite...", "Violation found,
-retrying (1/2)...", "Writing resume_acme.typ...", "Compiling...").
+`resume tailor` asks for the backend (unless `RESUME_BACKEND` is set),
+then streams per-node progress ("Selecting projects...", "Deciding
+education tier...", "Drafting rewrite...", "Violation found, retrying
+(1/2)...", "Writing resume_acme.typ...", "Compiling..."). `resume bank
+list` never touches the LLM.
 
 ## Status
 
