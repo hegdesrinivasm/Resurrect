@@ -1,0 +1,48 @@
+# Each entry is one project. `id` must be unique across the bank — it's
+# the key used in the generated resume data and in verification violation
+# messages.
+#
+# tags: the allowed-vocabulary whitelist. Used both by select_projects
+# (to match against the JD) and by verify (a rewritten bullet can't
+# introduce a tag/number that isn't in the original bullets or here).
+#
+# date: rendered right-aligned in the entry heading.
+# subtitle: optional one-liner rendered under the title (e.g. "Academic
+# Major Project: Python, PyTorch"); falls back to `company`, then tags.
+#
+# bullets.full: the complete, ground-truth bullet points for this entry.
+# bullets.short: optional condensed variants for space-constrained
+# resumes — not yet wired into resume_agent.py, reserved for later.
+
+- id: stutter-detection-app
+  title: "Cadence — Stutter Detection & Classification App"
+  date: "2025"
+  tags: [ml, speech-processing, desktop-app, ui-design]
+  bullets:
+    full:
+      - "Built a desktop app for stutter detection and classification with a two-screen flow: a passage viewer with an audio recorder, and an analysis results screen"
+      - "Designed a Classification Results table covering prolongation, block, sound repetition, word repetition, and interjection, alongside a localization timeline"
+      - "Followed Google's Material 3 Expressive design language for the interface"
+    short:
+      - "Built a two-screen desktop app for stutter detection and classification"
+
+- id: movie-review-sentiment
+  title: "Movie Review Sentiment Analysis"
+  date: "2024"
+  tags: [nlp, sentiment-analysis, ml, distilbert]
+  bullets:
+    full:
+      - "Fine-tuned a DistilBERT model on IMDB reviews as the production sentiment classifier"
+      - "Paired the production model with a Naive Bayes baseline for comparison"
+    short:
+      - "Fine-tuned DistilBERT on IMDB for movie review sentiment classification"
+
+- id: portfolio-website
+  title: "Personal Portfolio Website"
+  date: "2025"
+  tags: [web-development, frontend, react]
+  bullets:
+    full:
+      - "Built a multi-page personal portfolio site with dedicated detail pages per section and a dark/light theme toggle"
+    short:
+      - "Built a multi-page personal portfolio site with a theme toggle"

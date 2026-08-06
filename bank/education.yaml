@@ -1,0 +1,43 @@
+# Education entries only — degree, coursework, GPA. Hackathon wins,
+# competitions, and IEEE/club involvement live as static sections in
+# main.typ and are not selected by the agent.
+#
+# Entries are tiered: the agent picks "full" (SSLC + PUC + Engineering)
+# or "engineering_only" (Engineering only) based on the job description.
+#
+# Same schema as projects.yaml, plus `tier` (sslc | puc | engineering)
+# and an optional `company` for the degree name (rendered as the subtitle
+# under the institution in the Education section).
+#
+# TODO: fill in real SSLC and PUC details below.
+
+- id: sslc
+  title: "TODO: your SSLC school name"
+  tier: sslc
+  date: "TODO: year"
+  tags: [education]
+  bullets:
+    full:
+      - "TODO: add your SSLC percentage/GPA and relevant highlights"
+
+- id: puc
+  title: "TODO: your PUC college name"
+  tier: puc
+  date: "TODO: year"
+  tags: [education, science]
+  bullets:
+    full:
+      - "TODO: add your PUC percentage and relevant highlights"
+
+- id: engineering
+  title: "Vivekananda College of Engineering & Technology, Puttur (VTU, Belagavi)"
+  company: "Bachelor of Engineering in Artificial Intelligence and Machine Learning"
+  tier: engineering
+  date: "August 2027*"
+  tags: [education, machine-learning, deep-learning, nlp, operating-systems, dsa]
+  bullets:
+    full:
+      - "CGPA: 8.78 (up to 6th semester)"
+      - "Relevant Coursework: Machine Learning frameworks and algorithms, Generative AI pipelines for text generation and summarization, NLP systems for sentiment analysis, OS fundamentals, DSA and Algorithm designing"
+    short:
+      - "B.E. in Artificial Intelligence and Machine Learning, CGPA 8.78"
