@@ -51,7 +51,6 @@ class ResumeState(TypedDict):
     job_description: str
     company: str
     bank: dict                     # full content bank, loaded once at start
-    selected_ids: list[str]        # temp: projects + education ids (removed in Task 6)
     selected_projects: list[str]   # project entry ids the agent picked
     selected_education: list[str]  # education entry ids implied by the tier
     education_tier: str            # "full" | "engineering_only"
@@ -168,7 +167,7 @@ def select_projects(state: ResumeState) -> dict:
         selected = []
     known = {e["id"] for e in index}
     selected = [eid for eid in selected if eid in known]
-    return {"selected_projects": selected, "selected_ids": selected,
+    return {"selected_projects": selected,
             "retry_count": 0, "violations": []}
 
 
@@ -208,8 +207,7 @@ def select_education(state: ResumeState) -> dict:
     tiers = ("sslc", "puc", "engineering") if tier == "full" else ("engineering",)
     selected = [e["id"] for e in index if e["id"] in state["bank"]
                 and state["bank"][e["id"]].get("tier") in tiers]
-    return {"education_tier": tier, "selected_education": selected,
-            "selected_ids": state.get("selected_projects", []) + selected}
+    return {"education_tier": tier, "selected_education": selected}
 
 
 def draft_rewrite(state: ResumeState) -> dict:
@@ -268,32 +266,40 @@ def verify(state: ResumeState) -> dict:
     return {"violations": violations, "retry_count": state["retry_count"] + 1}
 
 
-def write_resume_data(state: ResumeState) -> dict:
-    """Reached once verify() passes, or once retries are exhausted —
-    in which case offending entries fall back to their original,
-    unedited bullets rather than risk a false claim.
-
-    Output is grouped by section so the Typst template can render
-    each section (projects, internships, academics) in order."""
-    payload = {}
-    for entry_id in state["selected_ids"]:
+def generate_typst_file(state: ResumeState) -> dict:
+    """Replaces write_resume_data: combine the main.typ template with the
+    selected (and possibly rewritten) entries, inlined as data, into a
+    standalone outputs/resume_<company>.typ. Entries with unresolved
+    violations fall back to their original bullets. No JSON is written."""
+    data = {}
+    for entry_id in state["selected_projects"] + state["selected_education"]:
         entry = state["bank"][entry_id]
-        section = entry.get("_section", "other")
+        section = entry["_section"]
         bullets = state["drafts"].get(entry_id, entry["bullets"]["full"])
         if any(v.startswith(entry_id) for v in state["violations"]):
             bullets = entry["bullets"]["full"]
-        payload_entry = {"title": entry["title"], "bullets": bullets}
-        for field in ("date", "subtitle", "company", "tags"):
+        payload_entry = {"title": entry["title"], "date": entry.get("date"),
+                         "bullets": bullets}
+        for field in ("subtitle", "company", "tags"):
             if entry.get(field):
                 payload_entry[field] = entry[field]
-        payload.setdefault(section, {})[entry_id] = payload_entry
-    OUTPUT_DATA.write_text(json.dumps(payload, indent=2))
-    return {"resume_data": payload}
+        data.setdefault(section, {})[entry_id] = payload_entry
+
+    template = MAIN_TYP.read_text()
+    marker = "@@DATA@@"
+    if marker not in template:
+        raise RuntimeError(f"{MAIN_TYP} is missing the {marker!r} data marker")
+    source = template.replace(marker, serialize_typst(data))
+
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    output_typ = OUTPUT_DIR / f"resume_{sanitize(state['company'])}.typ"
+    output_typ.write_text(source)
+    return {"output_typ": str(output_typ), "output_pdf": str(output_typ.with_suffix(".pdf"))}
 
 
 def compile_typst(state: ResumeState) -> dict:
-    subprocess.run(["typst", "compile", str(MAIN_TYP), str(OUTPUT_PDF)], check=True)
-    return {"pdf_path": str(OUTPUT_PDF)}
+    subprocess.run(["typst", "compile", state["output_typ"], state["output_pdf"]], check=True)
+    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -305,7 +311,7 @@ def compile_typst(state: ResumeState) -> dict:
 def route_after_verify(state: ResumeState) -> str:
     if state["violations"] and state["retry_count"] <= MAX_RETRIES:
         return "draft_rewrite"      # loop back and try again
-    return "write_resume_data"      # passed, or retries exhausted -> proceed with fallback
+    return "generate_typst_file"    # passed, or retries exhausted -> proceed with fallback
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +323,7 @@ graph.add_node("select_projects", select_projects)
 graph.add_node("select_education", select_education)
 graph.add_node("draft_rewrite", draft_rewrite)
 graph.add_node("verify", verify)
-graph.add_node("write_resume_data", write_resume_data)
+graph.add_node("generate_typst_file", generate_typst_file)
 graph.add_node("compile_typst", compile_typst)
 
 graph.set_entry_point("select_projects")
@@ -327,9 +333,9 @@ graph.add_edge("draft_rewrite", "verify")
 graph.add_conditional_edges(
     "verify",
     route_after_verify,
-    {"draft_rewrite": "draft_rewrite", "write_resume_data": "write_resume_data"},
+    {"draft_rewrite": "draft_rewrite", "generate_typst_file": "generate_typst_file"},
 )
-graph.add_edge("write_resume_data", "compile_typst")
+graph.add_edge("generate_typst_file", "compile_typst")
 graph.add_edge("compile_typst", END)
 
 app = graph.compile()
@@ -339,12 +345,15 @@ if __name__ == "__main__":
     jd_text = Path("job_description.txt").read_text()
     result = app.invoke({
         "job_description": jd_text,
+        "company": "untitled",
         "bank": load_bank(),
-        "selected_ids": [],
+        "selected_projects": [],
+        "selected_education": [],
+        "education_tier": "",
         "drafts": {},
         "violations": [],
         "retry_count": 0,
-        "resume_data": {},
-        "pdf_path": "",
+        "output_typ": "",
+        "output_pdf": "",
     })
-    print(f"Resume compiled at: {result['pdf_path']}")
+    print(f"Resume compiled at: {result['output_pdf']}")
