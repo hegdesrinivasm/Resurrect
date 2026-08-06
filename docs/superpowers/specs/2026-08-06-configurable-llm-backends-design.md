@@ -56,10 +56,27 @@ Environment variables, all optional except where noted:
 | `AZURE_OPENAI_ENDPOINT` | Azure endpoint (standard Azure env var) | — |
 | `ANTHROPIC_API_KEY` | Anthropic key (only for `anthropic` backend) | — |
 
+### CLI prompting
+
+The env vars are the *override* path. When a value is not set, the `tailor`
+command asks interactively (`typer.prompt`), with the env default as the prompt
+default. Precedence: **env var → interactive prompt → default**.
+
+- Backend: `RESUME_BACKEND` or prompt `LLM backend (ollama|anthropic|azure)`,
+  default `ollama`. An invalid typed value is rejected and re-prompted.
+- Model: `RESUME_MODEL` or prompt `Model`, default `qwen2.5-coder:7b` (ollama),
+  `claude-sonnet-4-6` (anthropic), `gpt-4o-mini` (azure).
+- `azure` only: deployment from `RESUME_AZURE_DEPLOYMENT` or prompt (default =
+  model); key and endpoint from `AZURE_OPENAI_API_KEY`/`AZURE_OPENAI_ENDPOINT`
+  or prompted when unset.
+- `anthropic` only: key from `ANTHROPIC_API_KEY` or prompted when unset.
+- `RESUME_BASE_URL` is respected when set and never prompted.
+- The `bank` command performs no LLM interaction and never prompts.
+
 Rules:
 
-- An invalid `RESUME_BACKEND` value fails fast at import with a `ValueError`
-  listing the valid options — never silently falls back.
+- An invalid `RESUME_BACKEND` env value fails fast with a `ValueError` listing
+  the valid options — never silently falls back.
 - When `RESUME_BACKEND=azure` and `RESUME_BASE_URL` is set, the endpoint is
   treated as an OpenAI-compatible serverless deployment (Foundry "instant
   access") and `ChatOpenAI` is used with that base URL.
@@ -71,23 +88,33 @@ Rules:
 
 ## Architecture
 
-### `get_chat_model()` → `BaseChatModel`
+### `build_chat_model(backend, model, *, base_url=None, azure_deployment=None, azure_api_version=None)` → `BaseChatModel`
 
-Reads the env vars and returns the appropriate LangChain ChatModel:
+A pure factory that reads no environment variables and constructs the
+appropriate LangChain ChatModel from explicit arguments:
 
 - `ollama` → `ChatOllama(model=..., base_url=..., temperature=0)`
 - `anthropic` → `ChatAnthropic(model=..., base_url=optional, temperature=0)`
 - `azure` → `AzureChatOpenAI(...)` or `ChatOpenAI(base_url=..., temperature=0)`
+- An invalid `backend` raises `ValueError` with the valid options listed.
 
-Module-level `client = get_chat_model()` replaces the current
-`client = Anthropic()`; the `MODEL` constant is removed (per-backend defaults
-replace it). Constructing the ollama default performs no I/O.
+There is **no module-level client**. The model is built per-run (by the CLI
+after prompting, or by `__main__` from env defaults) and carried in the graph
+state.
 
-### `_llm_call(system, user, max_tokens)` → `str`
+### Model lives in graph state
+
+`ResumeState` gains a `model: BaseChatModel` field. The three LLM nodes read
+`state["model"]`; other nodes (verify, generate_typst_file, compile_typst) do
+not touch it and it simply persists from the initial state. This keeps nodes
+testable (a fake model is injected via the initial state) and lets `bank list`
+run without ever constructing a model.
+
+### `_llm_call(model, system, user, max_tokens)` → `str`
 
 The single invocation wrapper used by all three LLM nodes:
 
-1. `client.invoke([SystemMessage(content=system), HumanMessage(content=user)])`
+1. `model.invoke([SystemMessage(content=system), HumanMessage(content=user)])`
 2. Normalize `AIMessage.content` to plain text: a bare string is returned as-is;
    a list of content blocks joins the `text` blocks.
 3. Return the text.
@@ -106,6 +133,9 @@ Robust JSON extraction for weak models:
 
 ### Node behavior changes (internals only)
 
+All three LLM nodes replace `client.messages.create(model=MODEL, ...)` with
+`_llm_call(state["model"], system, user, max_tokens)`.
+
 - **`select_projects`** — `text = _llm_call(...)`; `parsed = _extract_json(text)`;
   if `not isinstance(parsed, list)`: `parsed = []`. Then the existing
   known-id filter. (Robust to fences *and* to valid-but-non-list JSON — also
@@ -119,6 +149,14 @@ Robust JSON extraction for weak models:
   for that entry instead of crashing the graph (fixes the line-250 gap where a
   7B model's non-JSON reply raised `JSONDecodeError`).
 
+### `__main__` fallback path
+
+`python resume_agent.py` (no CLI) builds its model from env vars with the same
+defaults as the CLI prompts: `RESUME_BACKEND` (default `ollama`),
+`RESUME_MODEL` (default per backend), plus the azure/anthropic env vars — no
+prompting. The model is placed in the initial state alongside
+`job_description`, `company="untitled"`, and the empty working keys.
+
 ### Dependencies
 
 `pyproject.toml` adds `langchain-core`, `langchain-ollama`,
@@ -131,8 +169,10 @@ this change).
 ## Verification
 
 - `python -m py_compile resume_agent.py cli.py`.
-- Fake-model heredoc: a fake `client` object whose `invoke()` returns an object
-  with `.content`, monkeypatched onto `resume_agent.client`. Exercises:
+- Factory heredoc: `build_chat_model` returns the right ChatModel class for each
+  backend and raises `ValueError` for an invalid backend.
+- Fake-model heredoc: a fake model object whose `invoke()` returns an object
+  with `.content`, passed in the graph's initial `state["model"]`. Exercises:
   - `_extract_json`: fenced JSON, prose-wrapped JSON, bare quoted string,
     garbage → `None`.
   - `select_projects`: fenced JSON array → ids selected; non-list → `[]`.
@@ -140,16 +180,19 @@ this change).
     `engineering_only`.
   - `draft_rewrite`: fenced array → drafts; garbage → falls back to original
     `bullets.full`.
+- CLI prompt resolution is exercised manually in the end-to-end Task 9 run
+  (backend/model prompted interactively with no env vars set, then confirmed
+  to flow into the initial graph state).
 - End-to-end Task 9 against the real local Ollama `qwen2.5-coder:7b` with no
   env vars set (defaults), plus a `RESUME_MODEL` override run.
 - The anthropic and azure paths are verified by construction tests only
-  (a fake `invoke` plus factory selection given env vars) — they are not run
-  live because no credentials exist in this environment.
+  (factory selection and a fake `invoke`) — they are not run live because no
+  credentials exist in this environment.
 
 ## Docs
 
 - `README.md` gains an env-var reference table and a short "choose your
-  backend" section with ollama (default), azure (student credits), and
-  anthropic examples.
+  backend" section describing the interactive CLI prompts and the ollama
+  (default), azure (student credits), and anthropic paths.
 - `docs/project.md` updates the LLM-layer description to the backend-agnostic
   model.
