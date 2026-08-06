@@ -73,7 +73,7 @@ from typing import TypedDict
 import yaml
 
 from langgraph.graph import StateGraph, END
-from langchain_core.chat_models import BaseChatModel
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_anthropic import ChatAnthropic
 from langchain_ollama import ChatOllama
@@ -994,3 +994,4 @@ Expected: `git status` shows only untracked `coding_agent_prompt.md` and `job_de
 - **Spec coverage:** every spec item maps to a task — factory + purity (T1), model-in-state + node rewrites + `__main__` env fallback (T2), CLI env→prompt→default + credential export (T3), docs (T4), end-to-end + retry gate (T5). Invalid-backend `ValueError` is present in both `build_chat_model` (T1) and `build_model_from_env` (T2). `RESUME_BASE_URL` is never prompted (T3 resolver). `bank` never touches the LLM (T3 step 3 verification).
 - **Known design choice:** `ResumeState["model"]` is typed `object` rather than `BaseChatModel` to avoid pydantic-vs-TypedDict type-checker friction; the graph only validates keys, so runtime behavior is unaffected.
 - **Known limitation (spec-mandated):** anthropic/azure invoke paths are verified by construction + fake-model tests only; no credentials exist to hit those APIs. The ollama path is exercised for real in Task 5.
+- **Verified during execution:** langchain-core 1.x removed the `langchain_core.chat_models` module; `BaseChatModel` must be imported from `langchain_core.language_models` (Task 1 applied this fix — the imports block above reflects it).
