@@ -14,35 +14,41 @@
 # bullets.short: optional condensed variants for space-constrained
 # resumes — not yet wired into resume_agent.py, reserved for later.
 
-- id: stutter-detection-app
-  title: "Cadence — Stutter Detection & Classification App"
-  date: "2025"
-  tags: [ml, speech-processing, desktop-app, ui-design]
+- id: swaraaha
+  title: "Swaraaha — Speech Dysfluency Detection"
+  date: "2026"
+  tags: [ml, speech-processing, deep-learning, pytorch, desktop-app, web-development, react, fastapi]
   bullets:
     full:
-      - "Built a desktop app for stutter detection and classification with a two-screen flow: a passage viewer with an audio recorder, and an analysis results screen"
-      - "Designed a Classification Results table covering prolongation, block, sound repetition, word repetition, and interjection, alongside a localization timeline"
-      - "Followed Google's Material 3 Expressive design language for the interface"
+      - "Classifies speech dysfluencies — prolongation, block, sound repetition, word repetition, and interjection — with five Wav2Vec 2.0 binary classifiers combined by a hybrid MLP"
+      - "Localizes where dysfluencies occur using a CNN over spectrogram images"
+      - "Ships as both a React + FastAPI web app and a PySide6 desktop app sharing a common model directory"
+      - "Built the ML pipelines with PyTorch and Hugging Face Transformers"
     short:
-      - "Built a two-screen desktop app for stutter detection and classification"
+      - "Built a speech dysfluency detection system with Wav2Vec 2.0 classification and spectrogram-CNN localization"
 
-- id: movie-review-sentiment
-  title: "Movie Review Sentiment Analysis"
-  date: "2024"
-  tags: [nlp, sentiment-analysis, ml, distilbert]
+- id: notesleclerc
+  title: "NotesLeclerc — Lecture Notes Summarizer"
+  date: "2026"
+  tags: [nlp, llm, python, streamlit, web-development]
   bullets:
     full:
-      - "Fine-tuned a DistilBERT model on IMDB reviews as the production sentiment classifier"
-      - "Paired the production model with a Naive Bayes baseline for comparison"
+      - "Built a lecture notes summarizer that converts PDFs, text transcripts, and audio recordings into structured bullet-point summaries"
+      - "Transcribes audio locally with OpenAI Whisper and extracts PDF text with pypdf"
+      - "Orchestrates a Python LangGraph pipeline that calls Azure OpenAI (GPT-4o) for LLM summarization"
+      - "Offers Topic-Grouped, Sequential, and Structured summary formats with Markdown and plain-text export from a Streamlit UI"
     short:
-      - "Fine-tuned DistilBERT on IMDB for movie review sentiment classification"
+      - "Built a Streamlit lecture notes summarizer using LangGraph, Azure OpenAI (GPT-4o), and local Whisper transcription"
 
-- id: portfolio-website
-  title: "Personal Portfolio Website"
-  date: "2025"
-  tags: [web-development, frontend, react]
+- id: resurrect
+  title: "Resurrect — Resume Tailoring CLI"
+  date: "2026"
+  tags: [llm, python, cli, prompt-engineering]
   bullets:
     full:
-      - "Built a multi-page personal portfolio site with dedicated detail pages per section and a dark/light theme toggle"
+      - "Built a CLI that tailors a Typst resume to each job description through a LangGraph pipeline"
+      - "LLM selects the best-matching projects, rewrites bullets to mirror the JD's phrasing, and deterministically verifies no new facts are invented"
+      - "Backend-agnostic: runs on Ollama, Anthropic, or Azure OpenAI models"
+      - "Compiles a standalone .typ file and PDF per application with typst"
     short:
-      - "Built a multi-page personal portfolio site with a theme toggle"
+      - "Built a LangGraph CLI that tailors a Typst resume to each job description"
