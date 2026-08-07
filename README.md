@@ -67,12 +67,12 @@ them if they are unset.
 - **Ollama (local, free)** — run `ollama pull qwen2.5-coder:7b` once, then
   use it with zero configuration:
   ```bash
-  resume tailor job_description.txt --company acme
+  resurrect tailor job_description.txt --company acme
   ```
 - **Anthropic** — `export ANTHROPIC_API_KEY=sk-...` (or let the CLI prompt):
   ```bash
   export RESUME_BACKEND=anthropic
-  resume tailor job_description.txt --company acme
+  resurrect tailor job_description.txt --company acme
   ```
 - **Azure / Microsoft Foundry** — great if you have Azure for Students
   credits; `gpt-4o-mini` runs well under a cent per resume. Point
@@ -81,18 +81,18 @@ them if they are unset.
   ```bash
   export RESUME_BACKEND=azure
   export RESUME_MODEL=gpt-4o-mini
-  resume tailor job_description.txt --company acme
+  resurrect tailor job_description.txt --company acme
   ```
 
 ## Usage
 
 ```bash
 # Tailor a resume to a job description (backend from env or prompts)
-resume tailor job_description.txt --company acme
+resurrect tailor job_description.txt --company acme
 
 # List the content bank (never touches the LLM)
-resume bank list
-resume bank list --section projects
+resurrect bank list
+resurrect bank list --section projects
 ```
 
 Output: `outputs/resume_acme.typ` and `outputs/resume_acme.pdf`.
