@@ -1,8 +1,8 @@
 """cli.py — Typer command line interface for the resume tailoring agent.
 
 Commands:
-  resume tailor <job_description.txt> [--company NAME]
-  resume bank list [--section projects|education]
+  resurrect tailor <job_description.txt> [--company NAME]
+  resurrect bank list [--section projects|education]
 """
 
 import os

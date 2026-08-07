@@ -84,14 +84,14 @@ verification, and rendering concerns independent and testable in isolation.
 ## CLI
 
 ```bash
-resume tailor <job_description.txt> [--company NAME]
-resume bank list [--section projects|education]
+resurrect tailor <job_description.txt> [--company NAME]
+resurrect bank list [--section projects|education]
 ```
 
-`resume tailor` asks for the backend (unless `RESUME_BACKEND` is set),
+`resurrect tailor` asks for the backend (unless `RESUME_BACKEND` is set),
 then streams per-node progress ("Selecting projects...", "Deciding
 education tier...", "Drafting rewrite...", "Violation found, retrying
-(1/2)...", "Writing resume_acme.typ...", "Compiling..."). `resume bank
+(1/2)...", "Writing resume_acme.typ...", "Compiling..."). `resurrect bank
 list` never touches the LLM.
 
 ## Status

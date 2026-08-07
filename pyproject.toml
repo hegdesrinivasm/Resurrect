@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.scripts]
-resume = "cli:app"
+resurrect = "cli:app"
 
 [tool.setuptools]
 py-modules = ["cli", "resume_agent"]
