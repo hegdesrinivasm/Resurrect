@@ -1,0 +1,60 @@
+Job Title: Machine Learning Engineer
+
+Location: Remote / Hybrid / On-site (flexible)
+
+About the Company:
+We are a fast-growing technology team building intelligent products that solve real-world problems. Our cross-functional teams combine research, software engineering, and design to deliver production-grade ML systems that impact thousands of users.
+
+Role Summary:
+We are looking for an experienced Machine Learning Engineer to design, build, and ship scalable machine learning models and data-driven features into production. You will partner with product managers, data engineers, and software engineers to transform data into reliable ML services that power user-facing products and internal tools.
+
+Key Responsibilities:
+- Design, develop, and maintain end-to-end machine learning models and pipelines for production systems.
+- Collaborate with data engineering to collect, clean, and validate datasets; implement feature engineering and labeling strategies.
+- Prototype models quickly, evaluate performance using rigorous metrics, and iterate to production quality.
+- Implement training, validation, and hyperparameter tuning workflows; ensure reproducibility and experiment tracking.
+- Deploy and monitor models in production (APIs, batch jobs, streaming); build alerts and telemetry to track model health and data drift.
+- Optimize models and inference pipelines for latency, throughput, and cost at scale.
+- Work with software engineers to integrate models into services, and maintain CI/CD for ML (MLOps).
+- Conduct A/B tests and post-deployment analysis to measure impact and guide improvements.
+- Document designs, experiments, and operational runbooks; mentor junior engineers as needed.
+
+Required Qualifications:
+- Bachelor’s degree in Computer Science, Electrical Engineering, Mathematics, Statistics, or a related field, or equivalent practical experience.
+- 3+ years of experience building and shipping ML models or data-driven features in production.
+- Strong programming skills in Python and familiarity with core ML libraries (scikit-learn, TensorFlow, PyTorch).
+- Hands-on experience with data processing tools and libraries (pandas, NumPy, SQL); comfortable working with large datasets.
+- Proven experience deploying models to production using containers, orchestration (Docker, Kubernetes), or serverless platforms.
+- Solid understanding of core ML fundamentals: supervised/unsupervised learning, model evaluation, regularization, feature selection, and overfitting mitigation.
+- Experience with experiment tracking, model versioning, and reproducibility tools (MLflow, TensorBoard, DVC, or similar).
+- Familiarity with cloud platforms (AWS, GCP, or Azure) and common services for data storage, compute, and ML workloads.
+- Strong communication skills and ability to collaborate with cross-functional teams.
+
+Preferred Qualifications:
+- MS or PhD in a relevant field.
+- Experience with deep learning for NLP, computer vision, or recommendation systems.
+- Background in scalable data processing frameworks (Spark, Beam) and real-time/streaming systems.
+- Knowledge of model interpretability, fairness, privacy-preserving ML, and causal inference.
+- Published research or contributions to open-source ML projects.
+
+Technical Skills & Tools (examples):
+- Languages: Python, SQL
+- Frameworks: PyTorch, TensorFlow, scikit-learn
+- Data: pandas, NumPy, Spark
+- Infrastructure: Docker, Kubernetes, Airflow, Terraform
+- Cloud: AWS (S3, EC2, SageMaker), GCP (BigQuery, Dataflow), or Azure equivalents
+- MLOps: MLflow, DVC, Seldon, KServe, Prometheus, Grafana
+
+What We Offer:
+- Competitive salary and equity package
+- Flexible work hours and remote-friendly culture
+- Health, dental, and vision benefits (varies by location)
+- Generous PTO and parental leave
+- Budget for learning, conferences, and equipment
+
+How to Apply:
+Please send your resume and a brief note about relevant experience to hiring@example.com. Include links to relevant projects, GitHub repos, or papers when available.
+
+Equal Opportunity Employer:
+We are committed to creating a diverse and inclusive workplace. We encourage applicants of all backgrounds to apply.
+

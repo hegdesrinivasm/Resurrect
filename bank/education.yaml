@@ -12,22 +12,27 @@
 # TODO: fill in real SSLC and PUC details below.
 
 - id: sslc
-  title: "TODO: your SSLC school name"
+  title: "St. Philomena Aided High School, Puttur"
   tier: sslc
-  date: "TODO: year"
-  tags: [education]
+  date: "2021"
+  tags: [10th-grade, secondary school, high-school]
   bullets:
     full:
-      - "TODO: add your SSLC percentage/GPA and relevant highlights"
+      - "Percentage: 91.52%"
+    short:
+      - "Secondary School Leaving Certificate (SSLC), Percentage - 91.52%"
 
 - id: puc
-  title: "TODO: your PUC college name"
+  title: "St. Philomena PU College, Puttur"
   tier: puc
-  date: "TODO: year"
-  tags: [education, science]
+  date: "2023"
+  tags: [education, science, pre-university, physics, chemistry, mathematics, computer-science]
   bullets:
     full:
-      - "TODO: add your PUC percentage and relevant highlights"
+      - "Percentage: 93.5%"
+      - "President of the Student Council, 2022-23"
+    short:
+      - "Physics, Chemistry, Mathematics, Computer Science, Percentage - 93.5%"
 
 - id: engineering
   title: "Vivekananda College of Engineering & Technology, Puttur (VTU, Belagavi)"
