@@ -24,6 +24,8 @@ import json
 import os
 import re
 import subprocess
+import sys
+import urllib.request
 from pathlib import Path
 from typing import TypedDict
 
@@ -191,6 +193,138 @@ def build_model_from_env() -> BaseChatModel:
         azure_deployment=os.environ.get("RESUME_AZURE_DEPLOYMENT") or None,
         azure_api_version=os.environ.get("RESUME_AZURE_API_VERSION") or AZURE_API_VERSION,
     )
+
+
+# ---------------------------------------------------------------------------
+# 2.6. Preflight checks — make sure the backend is usable *before* the agent
+#    burns time on a rewrite. Ollama can be auto-healed (pull / auto-start);
+#    paid backends only get a cheap connectivity probe that fails fast.
+# ---------------------------------------------------------------------------
+
+OLLAMA_PROBE_TIMEOUT = 2.0    # seconds for the /api/tags connectivity probe
+OLLAMA_START_TIMEOUT = 180    # seconds to let `ollama run` spawn the daemon
+
+
+def _probe_ollama(base_url: str) -> bool:
+    """True when an Ollama server answers at base_url. Failures (connection
+    refused, timeout, bad URL) all count as unreachable."""
+    try:
+        with urllib.request.urlopen(
+            f"{base_url}/api/tags", timeout=OLLAMA_PROBE_TIMEOUT
+        ) as resp:
+            json.load(resp)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def _ollama_has_model(base_url: str, model: str) -> bool:
+    """True when the server reports `model` as pulled. Digest suffixes
+    (name@sha256:...) are stripped so exact names still match."""
+    try:
+        with urllib.request.urlopen(
+            f"{base_url}/api/tags", timeout=OLLAMA_PROBE_TIMEOUT
+        ) as resp:
+            tags = json.load(resp)
+    except (OSError, ValueError):
+        return False
+    names = {m.get("name", "").split("@")[0] for m in tags.get("models", [])}
+    return model in names
+
+
+def ensure_ollama_ready(model: str, base_url: str) -> None:
+    """Make sure the Ollama server is reachable with `model` pulled, pulling
+    the model or auto-starting the server when needed. Exits non-zero with a
+    clear message when neither is possible."""
+    if _ollama_has_model(base_url, model):
+        print(f"Model {model} ready on {base_url}")
+        return
+
+    if _probe_ollama(base_url):
+        print(f"Model {model} not found — pulling...")
+        try:
+            subprocess.run(["ollama", "pull", model], check=True)
+        except FileNotFoundError:
+            print(
+                "ollama binary not found — install it from https://ollama.com",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        except subprocess.CalledProcessError:
+            print(f"Failed to pull {model} — run `ollama pull {model}` manually.", file=sys.stderr)
+            raise SystemExit(1)
+        print(f"Model {model} ready on {base_url}")
+        return
+
+    # Server is down: `ollama run` spawns the daemon (and pulls the model if
+    # needed), then we re-probe instead of assuming success.
+    print(f"Ollama server not reachable at {base_url} — starting it...")
+    try:
+        subprocess.run(
+            ["ollama", "run", model],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=OLLAMA_START_TIMEOUT,
+        )
+    except FileNotFoundError:
+        print(
+            "ollama binary not found — install it from https://ollama.com",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    except subprocess.TimeoutExpired:
+        pass  # the daemon may still have come up; the re-probe decides
+
+    if _ollama_has_model(base_url, model):
+        print(f"Model {model} ready on {base_url}")
+        return
+
+    if _probe_ollama(base_url):
+        print(f"Model {model} not found — pulling...")
+        try:
+            subprocess.run(["ollama", "pull", model], check=True)
+        except FileNotFoundError:
+            print(
+                "ollama binary not found — install it from https://ollama.com",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        except subprocess.CalledProcessError:
+            print(f"Failed to pull {model} — run `ollama pull {model}` manually.", file=sys.stderr)
+            raise SystemExit(1)
+        print(f"Model {model} ready on {base_url}")
+        return
+
+    print(
+        f"Ollama server not reachable at {base_url} — start it with "
+        "`ollama serve` or the Ollama app, then retry.",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+
+
+def _probe_error_hint(error: Exception) -> str:
+    """Turn common SDK exceptions into actionable one-liners for the CLI."""
+    status = getattr(error, "status_code", None)
+    if status == 401:
+        return "authentication failed (check your API key)"
+    if status == 404:
+        return "endpoint or deployment not found (check URL/deployment name)"
+    if status is not None:
+        return f"HTTP {status}: {error}"
+    return str(error)
+
+
+def probe_cloud(model: BaseChatModel) -> None:
+    """Cheap connectivity check against a paid backend: one tiny call that
+    fails fast (bad key, wrong endpoint, no network) with a clear message."""
+    try:
+        _llm_call(model, "You are a connectivity probe.", "Reply with OK.", max_tokens=5)
+    except Exception as error:
+        print(f"Cloud backend not reachable: {_probe_error_hint(error)}", file=sys.stderr)
+        raise SystemExit(1)
+    print("Cloud backend reachable — connection OK.")
 
 
 def _content_text(content) -> str:
