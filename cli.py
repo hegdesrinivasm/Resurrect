@@ -1,7 +1,7 @@
 """cli.py — Typer command line interface for the resume tailoring agent.
 
 Commands:
-  resurrect tailor <job_description.txt> [--company NAME]
+  resurrect tailor <job_description.txt> [--company NAME] [-p/--preflight]
   resurrect bank list [--section projects|education]
 """
 
@@ -18,7 +18,9 @@ from resume_agent import (
     MAX_RETRIES,
     app as graph_app,
     build_chat_model,
+    ensure_ollama_ready,
     load_bank,
+    probe_cloud,
 )
 
 app = typer.Typer()
@@ -93,9 +95,21 @@ def tailor(
     company: Optional[str] = typer.Option(
         None, help="Company name used for the output filename (defaults to the JD file name)"
     ),
+    preflight: bool = typer.Option(
+        False,
+        "-p",
+        "--preflight",
+        help="Check the LLM backend is ready before tailoring: pulls/auto-starts "
+        "Ollama, or probes cloud credentials with a tiny call",
+    ),
 ) -> None:
     """Tailor a resume to a job description and compile it to PDF."""
     settings = _resolve_llm_settings(typer.prompt)
+    if preflight:
+        if settings["backend"] == "ollama":
+            ensure_ollama_ready(settings["model"], settings["base_url"])
+        else:
+            probe_cloud(build_chat_model(**settings))
     company_name = company or job_description.stem
     state = {
         "job_description": job_description.read_text(),
