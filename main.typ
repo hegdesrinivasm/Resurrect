@@ -76,9 +76,9 @@
   #v(4pt)
   +91 9060159605 | 
   #link("mailto:hegdesrinivasm+queries@gmail.com")[hegdesrinivasm+queries\@gmail.com] | 
-  #link("https://linkedin.com/in/hegdesrinivasm")[LinkedIn] | 
-  #link("https://github.com/hegdesrinivasm")[GitHub] | 
-  #link("https://hegdesrinivasm.vercel.app")[Portfolio]
+  #link("https://linkedin.com/in/hegdesrinivasm")[linkedin.com/in/hegdesrinivasm] |
+  #link("https://github.com/hegdesrinivasm")[github.com/hegdesrinivasm] |
+  #link("https://hegdesrinivasm.vercel.app")[hegdesrinivasm.vercel.app]
 ]
 
 // -------------------- PROFILE --------------------
@@ -101,13 +101,13 @@ Passionate final-year AIML engineering student eager to apply machine learning a
 // -------------------- INTERNSHIPS ----------------------
 = Internships
 
-#resumeHeading("Codex", "Feb 2026 - Present", subtitle: "Akanksha Charitable Trust: Project Management, Agile, Go")
+#resumeHeading("Codex", "Feb 2026 - July 2026", subtitle: "Akanksha Charitable Trust: Project Management, Agile, Go")
 - Managing a collaborative team to design and develop a mobile learning application for pre-beginner students, driving organizational goals through agile methodologies.
 - Conducting business analysis to define technical responsibilities and oversee the implementation of gamification modules, ensuring continuous software improvement.
 
 #v(4pt)
 
-#resumeHeading("Data Science Analytics", "May 2026 - Present", subtitle: "Wheeltrix: Python, Pandas, LangChain")
+#resumeHeading("Data Science Analytics", "May 2026 - July 2026", subtitle: "Wheeltrix: Python, Pandas, LangChain")
 - Received training on industry-standard machine learning practices, including model evaluation, data preprocessing, and production-ready ML workflows.
 - Building projects focused on sentiment analysis using NLP techniques and text summarization using generative AI pipelines.
 
