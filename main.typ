@@ -50,13 +50,20 @@
 }
 
 // Render every entry of one section, skipping the heading if empty.
-#let section(section, heading) = {
+// With bullets: false, entries render as a listing — bullets are joined
+// inline with " · " instead of being emitted as bullet points.
+#let section(section, heading, bullets: true) = {
   let entries = data.at(section, default: (:))
   if entries.len() > 0 {
     [= #heading] + block[
       #for entry in entries.values() [
         #resumeHeading(entry.title, entry.at("date", default: ""), subtitle: subtitleOf(entry))
-        #for bullet in entry.at("bullets", default: ()) [- #bullet]
+        #if bullets [
+          #for bullet in entry.at("bullets", default: ()) [- #bullet]
+        ] else [
+          #let bs = entry.at("bullets", default: ())
+          #if bs.len() > 0 [#bs.join(" · ")]
+        ]
         #v(4pt)
       ]
     ]
@@ -79,7 +86,8 @@
 Passionate final-year AIML engineering student eager to apply machine learning and deep learning expertise to real-world challenges. Hands-on experience building and training neural network models, designing ML pipelines, and translating AI architectures into working systems, thriving in high-energy hackathon environments and driven to deliver measurable impact in efficiency, sustainability, and innovation as an entry-level ML/AI engineer.
 
 // -------------------- EDUCATION --------------------
-#section("education", "Education")
+// Listing only — no bullet points under education.
+#section("education", "Education", bullets: false)
 
 // -------------------- SKILLS --------------------
 = Technical Skills
@@ -91,11 +99,17 @@ Passionate final-year AIML engineering student eager to apply machine learning a
 #section("projects", "Projects & Experiences")
 
 // -------------------- INTERNSHIPS ----------------------
-// Internships are static for now — replace the placeholder below with
-// real roles, one resumeHeading + bullets block each.
 = Internships
-#resumeHeading("Role Title", "Month Year – Month Year", subtitle: "Company Name")
-- TODO: add responsibilities, impact, and outcomes
+
+#resumeHeading("Codex", "Feb 2026 - Present", subtitle: "Akanksha Charitable Trust: Project Management, Agile, Go")
+- Managing a collaborative team to design and develop a mobile learning application for pre-beginner students, driving organizational goals through agile methodologies.
+- Conducting business analysis to define technical responsibilities and oversee the implementation of gamification modules, ensuring continuous software improvement.
+
+#v(4pt)
+
+#resumeHeading("Data Science Analytics", "May 2026 - Present", subtitle: "Wheeltrix: Python, Pandas, LangChain")
+- Received training on industry-standard machine learning practices, including model evaluation, data preprocessing, and production-ready ML workflows.
+- Building projects focused on sentiment analysis using NLP techniques and text summarization using generative AI pipelines.
 
 // -------------------- ACHIEVEMENTS --------------------
 = Achievements & Certifications
