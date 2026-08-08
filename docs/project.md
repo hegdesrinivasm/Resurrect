@@ -84,7 +84,7 @@ verification, and rendering concerns independent and testable in isolation.
 ## CLI
 
 ```bash
-resurrect tailor <job_description.txt> [--company NAME]
+resurrect tailor <job_description.txt> [--company NAME] [-p|--preflight]
 resurrect bank list [--section projects|education]
 ```
 
@@ -94,6 +94,24 @@ education tier...", "Drafting rewrite...", "Violation found, retrying
 (1/2)...", "Writing resume_acme.typ...", "Compiling..."). `resurrect bank
 list` never touches the LLM.
 
+### Preflight (`-p`/`--preflight`)
+
+Runs after settings resolve but before the graph starts, so a broken
+backend fails fast instead of silently wasting rewrite cycles:
+
+- **Ollama** — `ensure_ollama_ready(model, base_url)` probes
+  `GET {base_url}/api/tags`. If the model is listed it prints ready; if the
+  server answers but the model is missing it runs `ollama pull`; if the
+  server is down it runs `ollama run <model>` (which spawns the daemon)
+  and re-probes, pulling if needed. Any unrecoverable state exits non-zero
+  with instructions (`ollama serve` / the Ollama app / the install URL).
+- **Anthropic / Azure** — `probe_cloud(model)` makes one tiny, capped call
+  (`"Reply with OK."`); auth (401), endpoint (404), and network failures
+  are surfaced with actionable hints and a non-zero exit.
+
+Both helpers live in `resume_agent.py` and are wired into the CLI after
+`_resolve_llm_settings`, keyed off the resolved backend.
+
 ## Status
 
 - Built: two-bank selection (projects + education tier), deterministic
@@ -101,5 +119,5 @@ list` never touches the LLM.
 - Not yet: `bullets.short` (condensed bullets) is still unused; no
   `human_review` node (the graph is structured so one can be inserted
   between `generate_typst_file` and `compile_typst` via LangGraph
-  `interrupt()` + a checkpointer later); internships, SSLC, and PUC are
-  placeholders awaiting real content.
+  `interrupt()` + a checkpointer later); achievements/activities remain
+  static, and `main.typ` has no per-company override for internships yet.

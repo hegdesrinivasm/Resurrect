@@ -33,8 +33,9 @@ The content bank lives in `bank/`:
 - `education.yaml` — tiered entries (`sslc`, `puc`, `engineering`) with the
   same shape, plus a `tier` field.
 
-Internships, achievements, skills, and activities are static sections in
-`main.typ` (internships currently a marked placeholder).
+Internships, skills, and activities are static sections in `main.typ`;
+education renders as a bullet-free listing, and projects are pulled from
+the bank per application.
 
 ## Setup
 
@@ -64,15 +65,17 @@ Credentials come from the standard env vars of each backend
 `OPENAI_API_KEY` for OpenAI-compatible endpoints) — the CLI prompts for
 them if they are unset.
 
-- **Ollama (local, free)** — run `ollama pull qwen2.5-coder:7b` once, then
-  use it with zero configuration:
+- **Ollama (local, free)** — `--preflight` pulls the model and, if the
+  server isn't running, auto-starts it. After the first run you can drop
+  the flag:
   ```bash
-  resurrect tailor job_description.txt --company acme
+  resurrect tailor job_description.txt --company acme --preflight
   ```
-- **Anthropic** — `export ANTHROPIC_API_KEY=sk-...` (or let the CLI prompt):
+- **Anthropic** — `export ANTHROPIC_API_KEY=sk-...` (or let the CLI prompt);
+  `--preflight` verifies connectivity with a tiny call:
   ```bash
   export RESUME_BACKEND=anthropic
-  resurrect tailor job_description.txt --company acme
+  resurrect tailor job_description.txt --company acme --preflight
   ```
 - **Azure / Microsoft Foundry** — great if you have Azure for Students
   credits; `gpt-4o-mini` runs well under a cent per resume. Point
@@ -81,14 +84,22 @@ them if they are unset.
   ```bash
   export RESUME_BACKEND=azure
   export RESUME_MODEL=gpt-4o-mini
-  resurrect tailor job_description.txt --company acme
+  resurrect tailor job_description.txt --company acme --preflight
   ```
+
+`-p`/`--preflight` runs before any prompt-then-rewrite work: for Ollama it
+pulls the configured model or starts the server when needed, and for cloud
+backends it fails fast on a bad key, endpoint, or network — so a broken
+backend never silently burns a rewrite cycle.
 
 ## Usage
 
 ```bash
 # Tailor a resume to a job description (backend from env or prompts)
 resurrect tailor job_description.txt --company acme
+
+# ...or make sure the backend is ready first (pull/start Ollama, probe cloud)
+resurrect tailor job_description.txt --company acme --preflight
 
 # List the content bank (never touches the LLM)
 resurrect bank list
