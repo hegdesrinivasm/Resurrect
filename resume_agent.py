@@ -191,7 +191,7 @@ def _content_text(content) -> str:
 def _llm_call(model: BaseChatModel, system: str, user: str, max_tokens: int) -> str:
     """One chat call that returns plain text behind a max_tokens cap."""
     messages = [SystemMessage(content=system), HumanMessage(content=user)]
-    return _content_text(model.invoke(messages, max_tokens=max_tokens).content)
+    return _content_text(model.invoke(messages, max_output_tokens=max_tokens).content)
 
 
 def _extract_json(text: str):
