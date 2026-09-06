@@ -71,6 +71,10 @@ resurrect tailor job_description.txt --company acme --preflight
 
 # Use a specific Gemini model
 resurrect tailor job_description.txt --company acme --model gemini-2.5-flash
+
+# List the content bank (never touches the LLM)
+resurrect bank list
+resurrect bank list --section projects
 ```
 
 Output: `outputs/resume_acme.typ` and `outputs/resume_acme.pdf`.
