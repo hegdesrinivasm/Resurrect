@@ -39,71 +39,38 @@ the bank per application.
 
 ## Setup
 
+Requires `typst` on your PATH and a Google AI Studio API key.
+
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e .
+export GOOGLE_API_KEY=your_key   # or let the CLI prompt for it
 ```
 
-Requires `typst` on your PATH and at least one reachable LLM backend.
+## Backend
 
-## Choose your backend
-
-The agent is backend-agnostic. Pick one via `RESUME_BACKEND`
-(`ollama` — the default —, `anthropic`, or `azure`); the CLI also asks
-interactively if the variable is unset. All models run at `temperature=0`.
+The agent uses Gemini via Google AI Studio (`langchain-google-genai`). The
+model defaults to `gemini-2.5-flash` and can be overridden per run with
+`--model`. LLM calls run at `temperature=0` for deterministic output.
 
 | Env var | Default | Meaning |
 | --- | --- | --- |
-| `RESUME_BACKEND` | `ollama` | `ollama` \| `anthropic` \| `azure` |
-| `RESUME_MODEL` | per backend | `qwen2.5-coder:7b` / `claude-sonnet-4-6` / `gpt-4o-mini` |
-| `RESUME_BASE_URL` | `http://localhost:11434` | API base URL (never prompted) |
-| `RESUME_AZURE_DEPLOYMENT` | = model | Azure deployment name |
-| `RESUME_AZURE_API_VERSION` | `2024-06-01` | Azure API version |
+| `GOOGLE_API_KEY` | — (prompted) | Google AI Studio API key |
 
-Credentials come from the standard env vars of each backend
-(`ANTHROPIC_API_KEY`, `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT`,
-`OPENAI_API_KEY` for OpenAI-compatible endpoints) — the CLI prompts for
-them if they are unset.
-
-- **Ollama (local, free)** — `--preflight` pulls the model and, if the
-  server isn't running, auto-starts it. After the first run you can drop
-  the flag:
-  ```bash
-  resurrect tailor job_description.txt --company acme --preflight
-  ```
-- **Anthropic** — `export ANTHROPIC_API_KEY=sk-...` (or let the CLI prompt);
-  `--preflight` verifies connectivity with a tiny call:
-  ```bash
-  export RESUME_BACKEND=anthropic
-  resurrect tailor job_description.txt --company acme --preflight
-  ```
-- **Azure / Microsoft Foundry** — great if you have Azure for Students
-  credits; `gpt-4o-mini` runs well under a cent per resume. Point
-  `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_API_KEY` at your Foundry
-  deployment:
-  ```bash
-  export RESUME_BACKEND=azure
-  export RESUME_MODEL=gpt-4o-mini
-  resurrect tailor job_description.txt --company acme --preflight
-  ```
-
-`-p`/`--preflight` runs before any prompt-then-rewrite work: for Ollama it
-pulls the configured model or starts the server when needed, and for cloud
-backends it fails fast on a bad key, endpoint, or network — so a broken
-backend never silently burns a rewrite cycle.
+`-p`/`--preflight` makes one tiny capped call before the graph runs, so a
+bad or missing key fails fast instead of silently burning a rewrite cycle.
 
 ## Usage
 
 ```bash
-# Tailor a resume to a job description (backend from env or prompts)
+# Tailor a resume to a job description (prompts for GOOGLE_API_KEY if unset)
 resurrect tailor job_description.txt --company acme
 
-# ...or make sure the backend is ready first (pull/start Ollama, probe cloud)
+# ...or verify the backend is ready first (probes the Gemini key)
 resurrect tailor job_description.txt --company acme --preflight
 
-# List the content bank (never touches the LLM)
-resurrect bank list
-resurrect bank list --section projects
+# Use a specific Gemini model
+resurrect tailor job_description.txt --company acme --model gemini-2.5-flash
 ```
 
 Output: `outputs/resume_acme.typ` and `outputs/resume_acme.pdf`.
