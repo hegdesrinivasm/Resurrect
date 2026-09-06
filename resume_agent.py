@@ -21,11 +21,9 @@ Each bank entry should look like:
 """
 
 import json
-import os
 import re
 import subprocess
 import sys
-import urllib.request
 from pathlib import Path
 from typing import TypedDict
 
@@ -34,18 +32,10 @@ import yaml
 from langgraph.graph import StateGraph, END
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_anthropic import ChatAnthropic
-from langchain_ollama import ChatOllama
-from langchain_openai import AzureChatOpenAI, ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 MAX_RETRIES = 2
-BACKENDS = ("ollama", "anthropic", "azure")
-DEFAULT_MODELS = {
-    "ollama": "qwen2.5-coder:7b",
-    "anthropic": "claude-sonnet-4-6",
-    "azure": "gpt-4o-mini",
-}
-AZURE_API_VERSION = "2024-06-01"
+DEFAULT_MODEL = "gemini-2.5-flash"
 
 BANK_DIR = Path("bank")
 OUTPUT_DIR = Path("outputs")
@@ -151,158 +141,17 @@ def serialize_typst(data: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-def build_chat_model(
-    backend: str,
-    model: str,
-    *,
-    base_url: str | None = None,
-    azure_deployment: str | None = None,
-    azure_api_version: str | None = None,
-) -> BaseChatModel:
-    """Construct the chat model for a backend, temperature pinned to 0 for
-    deterministic output. Keys/endpoints are resolved by each LangChain
-    integration from the standard env vars, so this factory never reads env
-    itself — the CLI exports prompted values before calling this."""
-    if backend == "ollama":
-        return ChatOllama(model=model, temperature=0, base_url=base_url or "http://localhost:11434")
-    if backend == "anthropic":
-        return ChatAnthropic(model=model, temperature=0)
-    if backend == "azure":
-        if base_url:
-            return ChatOpenAI(model=model, temperature=0, base_url=base_url)
-        return AzureChatOpenAI(
-            model=model,
-            temperature=0,
-            azure_deployment=azure_deployment or model,
-            api_version=azure_api_version or AZURE_API_VERSION,
-        )
-    raise ValueError(f"Unknown LLM backend: {backend!r} (choose from ollama, anthropic, azure)")
-
-
-def build_model_from_env() -> BaseChatModel:
-    """Build a model from env vars with per-backend defaults. Used by the
-    __main__ fallback path, which never prompts; the CLI resolves its own
-    settings (prompts included) and calls build_chat_model directly."""
-    backend = os.environ.get("RESUME_BACKEND", "ollama")
-    if backend not in BACKENDS:
-        raise ValueError(f"Unknown LLM backend: {backend!r} (choose from {', '.join(BACKENDS)})")
-    return build_chat_model(
-        backend=backend,
-        model=os.environ.get("RESUME_MODEL") or DEFAULT_MODELS[backend],
-        base_url=os.environ.get("RESUME_BASE_URL") or None,
-        azure_deployment=os.environ.get("RESUME_AZURE_DEPLOYMENT") or None,
-        azure_api_version=os.environ.get("RESUME_AZURE_API_VERSION") or AZURE_API_VERSION,
-    )
+def build_gemini_model(model: str) -> BaseChatModel:
+    """Return a Gemini chat model at temperature 0 for deterministic output.
+    Credentials come from the GOOGLE_API_KEY env var (Google AI Studio)."""
+    return ChatGoogleGenerativeAI(model=model, temperature=0)
 
 
 # ---------------------------------------------------------------------------
-# 2.6. Preflight checks — make sure the backend is usable *before* the agent
-#    burns time on a rewrite. Ollama can be auto-healed (pull / auto-start);
-#    paid backends only get a cheap connectivity probe that fails fast.
+# 2.6. Preflight check — make sure the Gemini backend is usable *before* the
+#    agent burns time on a rewrite: one cheap connectivity probe that fails
+#    fast on a bad/missing key or no network.
 # ---------------------------------------------------------------------------
-
-OLLAMA_PROBE_TIMEOUT = 2.0    # seconds for the /api/tags connectivity probe
-OLLAMA_START_TIMEOUT = 180    # seconds to let `ollama run` spawn the daemon
-
-
-def _probe_ollama(base_url: str) -> bool:
-    """True when an Ollama server answers at base_url. Failures (connection
-    refused, timeout, bad URL) all count as unreachable."""
-    try:
-        with urllib.request.urlopen(
-            f"{base_url}/api/tags", timeout=OLLAMA_PROBE_TIMEOUT
-        ) as resp:
-            json.load(resp)
-        return True
-    except (OSError, ValueError):
-        return False
-
-
-def _ollama_has_model(base_url: str, model: str) -> bool:
-    """True when the server reports `model` as pulled. Digest suffixes
-    (name@sha256:...) are stripped so exact names still match."""
-    try:
-        with urllib.request.urlopen(
-            f"{base_url}/api/tags", timeout=OLLAMA_PROBE_TIMEOUT
-        ) as resp:
-            tags = json.load(resp)
-    except (OSError, ValueError):
-        return False
-    names = {m.get("name", "").split("@")[0] for m in tags.get("models", [])}
-    return model in names
-
-
-def ensure_ollama_ready(model: str, base_url: str) -> None:
-    """Make sure the Ollama server is reachable with `model` pulled, pulling
-    the model or auto-starting the server when needed. Exits non-zero with a
-    clear message when neither is possible."""
-    if _ollama_has_model(base_url, model):
-        print(f"Model {model} ready on {base_url}")
-        return
-
-    if _probe_ollama(base_url):
-        print(f"Model {model} not found — pulling...")
-        try:
-            subprocess.run(["ollama", "pull", model], check=True)
-        except FileNotFoundError:
-            print(
-                "ollama binary not found — install it from https://ollama.com",
-                file=sys.stderr,
-            )
-            raise SystemExit(1)
-        except subprocess.CalledProcessError:
-            print(f"Failed to pull {model} — run `ollama pull {model}` manually.", file=sys.stderr)
-            raise SystemExit(1)
-        print(f"Model {model} ready on {base_url}")
-        return
-
-    # Server is down: `ollama run` spawns the daemon (and pulls the model if
-    # needed), then we re-probe instead of assuming success.
-    print(f"Ollama server not reachable at {base_url} — starting it...")
-    try:
-        subprocess.run(
-            ["ollama", "run", model],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=OLLAMA_START_TIMEOUT,
-        )
-    except FileNotFoundError:
-        print(
-            "ollama binary not found — install it from https://ollama.com",
-            file=sys.stderr,
-        )
-        raise SystemExit(1)
-    except subprocess.TimeoutExpired:
-        pass  # the daemon may still have come up; the re-probe decides
-
-    if _ollama_has_model(base_url, model):
-        print(f"Model {model} ready on {base_url}")
-        return
-
-    if _probe_ollama(base_url):
-        print(f"Model {model} not found — pulling...")
-        try:
-            subprocess.run(["ollama", "pull", model], check=True)
-        except FileNotFoundError:
-            print(
-                "ollama binary not found — install it from https://ollama.com",
-                file=sys.stderr,
-            )
-            raise SystemExit(1)
-        except subprocess.CalledProcessError:
-            print(f"Failed to pull {model} — run `ollama pull {model}` manually.", file=sys.stderr)
-            raise SystemExit(1)
-        print(f"Model {model} ready on {base_url}")
-        return
-
-    print(
-        f"Ollama server not reachable at {base_url} — start it with "
-        "`ollama serve` or the Ollama app, then retry.",
-        file=sys.stderr,
-    )
-    raise SystemExit(1)
-
 
 def _probe_error_hint(error: Exception) -> str:
     """Turn common SDK exceptions into actionable one-liners for the CLI."""
@@ -316,15 +165,15 @@ def _probe_error_hint(error: Exception) -> str:
     return str(error)
 
 
-def probe_cloud(model: BaseChatModel) -> None:
-    """Cheap connectivity check against a paid backend: one tiny call that
-    fails fast (bad key, wrong endpoint, no network) with a clear message."""
+def probe_gemini(model: BaseChatModel) -> None:
+    """Cheap connectivity check: one tiny capped call that fails fast on a
+    bad/missing key or no network, with an actionable message."""
     try:
         _llm_call(model, "You are a connectivity probe.", "Reply with OK.", max_tokens=5)
     except Exception as error:
-        print(f"Cloud backend not reachable: {_probe_error_hint(error)}", file=sys.stderr)
+        print(f"Gemini backend not reachable: {_probe_error_hint(error)}", file=sys.stderr)
         raise SystemExit(1)
-    print("Cloud backend reachable — connection OK.")
+    print("Gemini backend reachable — connection OK.")
 
 
 def _content_text(content) -> str:
@@ -340,11 +189,9 @@ def _content_text(content) -> str:
 
 
 def _llm_call(model: BaseChatModel, system: str, user: str, max_tokens: int) -> str:
-    """One chat call that returns plain text. max_tokens caps the paid
-    backends; Ollama stops on its own and would reject the extra kwarg."""
+    """One chat call that returns plain text behind a max_tokens cap."""
     messages = [SystemMessage(content=system), HumanMessage(content=user)]
-    kwargs = {} if isinstance(model, ChatOllama) else {"max_tokens": max_tokens}
-    return _content_text(model.invoke(messages, **kwargs).content)
+    return _content_text(model.invoke(messages, max_tokens=max_tokens).content)
 
 
 def _extract_json(text: str):
@@ -568,7 +415,7 @@ if __name__ == "__main__":
         "job_description": jd_text,
         "company": "untitled",
         "bank": load_bank(),
-        "model": build_model_from_env(),
+        "model": build_gemini_model(DEFAULT_MODEL),
         "selected_projects": [],
         "selected_education": [],
         "education_tier": "",
