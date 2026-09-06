@@ -52,19 +52,12 @@ directly:
 
 ## LLM layer
 
-`build_chat_model(backend, model, *, base_url, azure_deployment,
-azure_api_version)` is a pure factory returning a LangChain `BaseChatModel`:
-`ChatOllama`, `ChatAnthropic`, `AzureChatOpenAI`, or — when an azure
-backend also sets `RESUME_BASE_URL` — `ChatOpenAI` against an
-OpenAI-compatible serverless endpoint. The factory never reads the
-environment; credentials are resolved by each LangChain integration from
-its standard env vars (`AZURE_OPENAI_API_KEY`/`AZURE_OPENAI_ENDPOINT`,
-`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`). The CLI resolves backend/model as
-env var → prompt → default (`RESUME_BACKEND`, `RESUME_MODEL`,
-`RESUME_BASE_URL`, `RESUME_AZURE_DEPLOYMENT`, `RESUME_AZURE_API_VERSION`)
-and prompts for any missing credential, exporting it so construction sees
-it. All models run at `temperature=0`; the `max_tokens` cap is passed to
-paid backends only (Ollama rejects the kwarg and stops on its own).
+`build_gemini_model(model)` returns a `ChatGoogleGenerativeAI` at
+`temperature=0` for deterministic output. Credentials come from the
+`GOOGLE_API_KEY` env var (Google AI Studio); the CLI prompts for it when
+unset and exports it so construction sees it. All calls pass a `max_tokens`
+cap (there is no longer an Ollama exception). The model defaults to
+`gemini-2.5-flash`, overridable via `--model`.
 
 ## Why the deterministic guardrail
 
@@ -84,33 +77,22 @@ verification, and rendering concerns independent and testable in isolation.
 ## CLI
 
 ```bash
-resurrect tailor <job_description.txt> [--company NAME] [-p|--preflight]
+resurrect tailor <job_description.txt> [--company NAME] [--model MODEL] [-p|--preflight]
 resurrect bank list [--section projects|education]
 ```
 
-`resurrect tailor` asks for the backend (unless `RESUME_BACKEND` is set),
-then streams per-node progress ("Selecting projects...", "Deciding
-education tier...", "Drafting rewrite...", "Violation found, retrying
-(1/2)...", "Writing resume_acme.typ...", "Compiling..."). `resurrect bank
-list` never touches the LLM.
+`resurrect tailor` prompts for `GOOGLE_API_KEY` if unset, then streams
+per-node progress ("Selecting projects...", "Deciding education tier...",
+"Drafting rewrite...", "Violation found, retrying (1/2)...", "Writing
+resume_acme.typ...", "Compiling..."). `resurrect bank list` never touches
+the LLM.
 
 ### Preflight (`-p`/`--preflight`)
 
-Runs after settings resolve but before the graph starts, so a broken
-backend fails fast instead of silently wasting rewrite cycles:
-
-- **Ollama** — `ensure_ollama_ready(model, base_url)` probes
-  `GET {base_url}/api/tags`. If the model is listed it prints ready; if the
-  server answers but the model is missing it runs `ollama pull`; if the
-  server is down it runs `ollama run <model>` (which spawns the daemon)
-  and re-probes, pulling if needed. Any unrecoverable state exits non-zero
-  with instructions (`ollama serve` / the Ollama app / the install URL).
-- **Anthropic / Azure** — `probe_cloud(model)` makes one tiny, capped call
-  (`"Reply with OK."`); auth (401), endpoint (404), and network failures
-  are surfaced with actionable hints and a non-zero exit.
-
-Both helpers live in `resume_agent.py` and are wired into the CLI after
-`_resolve_llm_settings`, keyed off the resolved backend.
+Runs after the model is built but before the graph starts, so a bad/missing
+key fails fast instead of silently wasting rewrite cycles: `probe_gemini(model)`
+makes one tiny, capped call (`"Reply with OK."`); auth (401) and network
+failures are surfaced with actionable hints and a non-zero exit.
 
 ## Status
 
