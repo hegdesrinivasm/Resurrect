@@ -1,8 +1,10 @@
 """cli.py — Typer command line interface for the resume tailoring agent.
 
 Commands:
-  resurrect tailor <job_description.txt> [--company NAME] [-p/--preflight]
+  resurrect tailor <job_description.txt> [--company NAME] [--model MODEL] [-p/--preflight]
   resurrect bank list [--section projects|education]
+
+Uses Google AI Studio (Gemini) via GOOGLE_API_KEY.
 """
 
 import os
@@ -12,72 +14,28 @@ from typing import Optional
 import typer
 
 from resume_agent import (
-    AZURE_API_VERSION,
-    BACKENDS,
-    DEFAULT_MODELS,
     MAX_RETRIES,
+    DEFAULT_MODEL,
     app as graph_app,
-    build_chat_model,
-    ensure_ollama_ready,
+    build_gemini_model,
     load_bank,
-    probe_cloud,
+    probe_gemini,
 )
 
 app = typer.Typer()
 bank_app = typer.Typer()
 app.add_typer(bank_app, name="bank")
 
-DEFAULT_BACKEND = "ollama"
-DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 
+def _get_api_key(prompt) -> str:
+    """Return GOOGLE_API_KEY from env, or prompt for it and export it."""
+    key = os.environ.get("GOOGLE_API_KEY")
+    if not key:
+        key = prompt("Google AI Studio API key (GOOGLE_API_KEY)", hide_input=True)
+        if key:
+            os.environ["GOOGLE_API_KEY"] = key
+    return key
 
-def _prompt_env(prompt, name: str, text: str, *, hide_input: bool = False) -> None:
-    """If env var `name` is unset, prompt for it and export the answer."""
-    if os.environ.get(name):
-        return
-    value = prompt(text, hide_input=hide_input)
-    if value:
-        os.environ[name] = value
-
-
-def _resolve_llm_settings(prompt) -> dict:
-    """Resolve backend/model/connection settings as env var -> prompt ->
-    default. `prompt` is injected so tests can fake typer.prompt.
-    Prompted credentials are exported to env, which is how they reach the
-    LangChain model constructors. RESUME_BASE_URL is never prompted."""
-    backend = os.environ.get("RESUME_BACKEND", "")
-    if backend not in BACKENDS:
-        while backend not in BACKENDS:
-            backend = prompt("LLM backend (ollama|anthropic|azure)", default=DEFAULT_BACKEND)
-        os.environ["RESUME_BACKEND"] = backend
-
-    model = os.environ.get("RESUME_MODEL") or prompt(
-        "LLM model", default=DEFAULT_MODELS[backend]
-    )
-
-    base_url = os.environ.get("RESUME_BASE_URL") or None
-    azure_deployment = os.environ.get("RESUME_AZURE_DEPLOYMENT") or None
-    azure_api_version = os.environ.get("RESUME_AZURE_API_VERSION") or AZURE_API_VERSION
-
-    if backend == "ollama" and base_url is None:
-        base_url = DEFAULT_OLLAMA_BASE_URL
-    elif backend == "azure":
-        azure_deployment = azure_deployment or prompt("Azure deployment name", default=model)
-        if base_url is None:
-            _prompt_env(prompt, "AZURE_OPENAI_API_KEY", "Azure API key", hide_input=True)
-            _prompt_env(prompt, "AZURE_OPENAI_ENDPOINT", "Azure endpoint URL")
-        else:
-            _prompt_env(prompt, "OPENAI_API_KEY", "OpenAI-compatible API key", hide_input=True)
-    elif backend == "anthropic":
-        _prompt_env(prompt, "ANTHROPIC_API_KEY", "Anthropic API key", hide_input=True)
-
-    return {
-        "backend": backend,
-        "model": model,
-        "base_url": base_url,
-        "azure_deployment": azure_deployment,
-        "azure_api_version": azure_api_version,
-    }
 
 PROGRESS = {
     "select_projects": "Selecting projects...",
@@ -89,33 +47,29 @@ PROGRESS = {
 
 @app.command()
 def tailor(
-    job_description: Path = typer.Argument(
-        ..., help="Path to the job description text file"
-    ),
+    job_description: Path = typer.Argument(..., help="Path to the job description text file"),
     company: Optional[str] = typer.Option(
         None, help="Company name used for the output filename (defaults to the JD file name)"
     ),
+    model: str = typer.Option(
+        DEFAULT_MODEL, "--model", help="Gemini model to use (default: gemini-2.5-flash)"
+    ),
     preflight: bool = typer.Option(
-        False,
-        "-p",
-        "--preflight",
-        help="Check the LLM backend is ready before tailoring: pulls/auto-starts "
-        "Ollama, or probes cloud credentials with a tiny call",
+        False, "-p", "--preflight",
+        help="Check the Gemini backend is reachable before tailoring (probes for a bad key / no network)",
     ),
 ) -> None:
     """Tailor a resume to a job description and compile it to PDF."""
-    settings = _resolve_llm_settings(typer.prompt)
+    _get_api_key(typer.prompt)
+    llm = build_gemini_model(model)
     if preflight:
-        if settings["backend"] == "ollama":
-            ensure_ollama_ready(settings["model"], settings["base_url"])
-        else:
-            probe_cloud(build_chat_model(**settings))
+        probe_gemini(llm)
     company_name = company or job_description.stem
     state = {
         "job_description": job_description.read_text(),
         "company": company_name,
         "bank": load_bank(),
-        "model": build_chat_model(**settings),
+        "model": llm,
         "selected_projects": [],
         "selected_education": [],
         "education_tier": "",
