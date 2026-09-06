@@ -55,8 +55,8 @@ directly:
 `build_gemini_model(model)` returns a `ChatGoogleGenerativeAI` at
 `temperature=0` for deterministic output. Credentials come from the
 `GOOGLE_API_KEY` env var (Google AI Studio); the CLI prompts for it when
-unset and exports it so construction sees it. All calls pass a `max_tokens`
-cap (there is no longer an Ollama exception). The model defaults to
+unset and exports it so construction sees it. All calls pass a
+`max_output_tokens` cap. The model defaults to
 `gemini-2.5-flash`, overridable via `--model`.
 
 ## Why the deterministic guardrail

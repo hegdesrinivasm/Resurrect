@@ -159,7 +159,7 @@ def _probe_error_hint(error: Exception) -> str:
     if status == 401:
         return "authentication failed (check your API key)"
     if status == 404:
-        return "endpoint or deployment not found (check URL/deployment name)"
+        return "model or endpoint not found (check the model name with --model)"
     if status is not None:
         return f"HTTP {status}: {error}"
     return str(error)
